@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+# Set strict mode
+set -euo pipefail
+
+# Function to display usage information
+usage() {
+  echo "Usage: $0 [-p <previous_tag>] [-l <latest_tag>]"
+  exit 1
+}
+
+# Initialize variables
+previous_tag=""
+latest_tag=""
+
+# Parse command-line options
+while getopts ":p:l:" opt; do
+  case $opt in
+    p)
+      previous_tag=$OPTARG
+      ;;
+    l)
+      latest_tag=$OPTARG
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      usage
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      usage
+      ;;
+  esac
+done
+
+# Shift options so that $1 now refers to the first non-option argument
+shift $((OPTIND - 1))
+
+# Set latest tag, defaulting to our calculated value if not provided
+if [ -z "$latest_tag" ]; then
+  latest_tag=$(git describe --tags --abbrev=0 --first-parent)
+elif [ "$#" -ne 0 ]; then
+  echo "Invalid number of arguments." >&2
+  usage
+fi
+
+# Get the latest tag ending with "-prd" if not provided
+if [ -z "$latest_tag" ]; then
+  echo "Error: No tag found."
+  exit 1
+fi
+
+# Get the previous tag ending with "-prd" if not provided
+if [ -z "$previous_tag" ]; then
+  # Calculate the previous tag
+  previous_tag=$(git describe --tags --abbrev=0 --first-parent "$latest_tag^")
+fi
+
+# Check if the provided previous tag exists
+if ! git rev-parse "$previous_tag" >/dev/null 2>&1; then
+  echo "Error: Provided previous tag '$previous_tag' does not exist."
+  exit 1
+fi
+
+# Print the tags
+echo "Diff summary between tags:"
+echo "$previous_tag and $latest_tag"
+
+# Fetch the commits between the tags
+commits=$(git log --pretty=format:"%h - %an: %s" "$previous_tag..$latest_tag")
+
+# Print the diff summary
+echo "$commits"
